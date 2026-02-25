@@ -1,0 +1,25 @@
+{
+  "name": "api-busca-produto",
+  "version": "1.0.0",
+  "description": "API para busca de produtos no Mercado Livre com comparação por especificações técnicas para licitações",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "mercadolivre",
+    "licitacao",
+    "busca",
+    "produtos"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@supabase/supabase-js": "^2.97.0",
+    "fastify": "^5.7.4",
+    "p-limit": "^7.3.0",
+    "pino-pretty": "^13.1.3"
+  }
+}
