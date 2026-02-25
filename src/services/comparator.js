@@ -2,7 +2,7 @@ import { normalizar, compararTextos } from '../utils/textMatch.js';
 import { buscarEquivalente } from '../utils/specParser.js';
 
 /**
- * Compara as specs da licitação com os atributos de um item do ML.
+ * Compara as specs da licitação com os atributos de um item (qualquer fonte).
  * Retorna um objeto com o score de cada spec e o score total.
  */
 export function compararSpecs(specsLicitacao, itemDetalhes) {
@@ -10,9 +10,13 @@ export function compararSpecs(specsLicitacao, itemDetalhes) {
     return { specScore: 1.0, detalhes: {} };
   }
 
+  // Suporta formato ML (attributes + description) e formato normalizado (attributes + descricao)
   const atributos = itemDetalhes.attributes || [];
-  const titulo = itemDetalhes.title || '';
-  const descricao = itemDetalhes.description?.plain_text || itemDetalhes.description || '';
+  const titulo = itemDetalhes.titulo || itemDetalhes.title || '';
+  const descricao = itemDetalhes.descricao
+    || itemDetalhes.description?.plain_text
+    || itemDetalhes.description
+    || '';
 
   // Texto combinado para fallback de busca textual
   const textoCompleto = `${titulo} ${descricao}`;

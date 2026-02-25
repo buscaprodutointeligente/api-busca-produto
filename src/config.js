@@ -12,6 +12,10 @@ const config = {
     appId: process.env.ML_APP_ID,
     clientSecret: process.env.ML_CLIENT_SECRET,
   },
+  google: {
+    apiKey: process.env.GOOGLE_API_KEY,
+    cseId: process.env.GOOGLE_CSE_ID,
+  },
 };
 
 export default config;
