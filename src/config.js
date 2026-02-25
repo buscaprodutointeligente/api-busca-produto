@@ -9,6 +9,8 @@ const config = {
     concurrency: 5,
     searchCacheTTLHours: 2,
     itemCacheTTLHours: 24,
+    appId: process.env.ML_APP_ID,
+    clientSecret: process.env.ML_CLIENT_SECRET,
   },
 };
 
