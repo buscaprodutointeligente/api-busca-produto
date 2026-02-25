@@ -53,7 +53,10 @@ async function buscarFonte(fonte, query) {
     }
 
     case 'shopee':
-      return buscarShopee(query);
+      // API direta da Shopee bloqueia servidores cloud (403).
+      // Fallback: busca via Google CSE com site:shopee.com.br
+      console.log(`[${new Date().toISOString()}] [shopee] API direta indisponível — usando Google CSE (site:shopee.com.br)`);
+      return buscarGoogle(`${query} site:shopee.com.br`);
 
     case 'google':
       return buscarGoogle(query);

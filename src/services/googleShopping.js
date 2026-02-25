@@ -5,84 +5,131 @@ import config from '../config.js';
  * Requer GOOGLE_API_KEY e GOOGLE_CSE_ID configurados.
  *
  * Setup:
- * 1. Criar projeto em console.cloud.google.com
- * 2. Ativar "Custom Search JSON API"
- * 3. Criar CSE em cse.google.com configurado para buscar em sites de compras BR
- * 4. Obter API Key e CSE ID
+ * 1. Acessar console.cloud.google.com → criar projeto → ativar "Custom Search JSON API"
+ * 2. Acessar cse.google.com → criar um Custom Search Engine
+ *    - Em "Sites para pesquisar" adicionar os marketplaces:
+ *      shopee.com.br, mercadolivre.com.br, americanas.com.br,
+ *      magazineluiza.com.br, amazon.com.br, kabum.com.br
+ *    - Ativar "Pesquisa em toda a web" para cobrir qualquer loja
+ * 3. Copiar o Search Engine ID (cx) → GOOGLE_CSE_ID
+ * 4. No console.cloud.google.com → Credenciais → criar API Key → GOOGLE_API_KEY
  */
+
+// Marketplaces BR para restringir a busca quando não há CSE configurado por sites
+const SITES_BR = [
+  'shopee.com.br',
+  'mercadolivre.com.br',
+  'americanas.com.br',
+  'magazineluiza.com.br',
+  'amazon.com.br',
+  'kabum.com.br',
+  'submarino.com.br',
+];
 
 /**
  * Busca produtos via Google Custom Search e retorna no formato normalizado.
+ * Faz até 2 chamadas para cobrir mais resultados (máx 10 por chamada na API do Google).
  */
-export async function buscarGoogle(query, limit = 10) {
+export async function buscarGoogle(query, limit = 20) {
   if (!config.google?.apiKey || !config.google?.cseId) {
-    console.warn(`[${new Date().toISOString()}] [Google] GOOGLE_API_KEY ou GOOGLE_CSE_ID não configurados`);
+    console.warn(`[${new Date().toISOString()}] [Google] GOOGLE_API_KEY ou GOOGLE_CSE_ID não configurados — fonte desativada`);
     return [];
   }
 
-  console.log(`[${new Date().toISOString()}] [Google] Buscando: ${query}`);
+  console.log(`[${new Date().toISOString()}] [Google] Buscando: "${query}"`);
 
-  // Google CSE retorna no máximo 10 por chamada
-  const numResults = Math.min(limit, 10);
+  // Adiciona restrição de sites de compras à query para resultados mais precisos
+  const queryComSites = `${query} comprar`;
 
-  const params = new URLSearchParams({
-    key: config.google.apiKey,
-    cx: config.google.cseId,
-    q: query,
-    num: String(numResults),
-    gl: 'br',
-    hl: 'pt',
-  });
+  const resultados = [];
+  const pages = Math.ceil(Math.min(limit, 20) / 10); // máx 2 páginas (20 resultados)
 
-  const url = `https://www.googleapis.com/customsearch/v1?${params}`;
+  for (let page = 0; page < pages; page++) {
+    const start = page * 10 + 1; // Google usa índice 1-based
 
-  try {
-    const response = await fetch(url);
+    const params = new URLSearchParams({
+      key: config.google.apiKey,
+      cx: config.google.cseId,
+      q: queryComSites,
+      num: '10',
+      start: String(start),
+      gl: 'br',
+      hl: 'pt',
+    });
 
-    if (!response.ok) {
-      const err = await response.json();
-      console.error(`[${new Date().toISOString()}] [Google] Erro ${response.status}:`, err?.error?.message);
-      return [];
+    const url = `https://www.googleapis.com/customsearch/v1?${params}`;
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        console.error(`[${new Date().toISOString()}] [Google] Erro ${response.status}:`, err?.error?.message || 'desconhecido');
+        break;
+      }
+
+      const data = await response.json();
+      const items = data?.items || [];
+
+      console.log(`[${new Date().toISOString()}] [Google] Página ${page + 1}: ${items.length} resultados`);
+
+      const normalizados = items.map(normalizarItemGoogle).filter(Boolean);
+      resultados.push(...normalizados);
+
+      // Parar se não há mais resultados
+      if (items.length < 10) break;
+
+    } catch (err) {
+      console.error(`[${new Date().toISOString()}] [Google] Falha na busca:`, err.message);
+      break;
     }
-
-    const data = await response.json();
-    const items = data?.items || [];
-
-    return items.map(item => normalizarItemGoogle(item)).filter(Boolean);
-  } catch (err) {
-    console.error(`[${new Date().toISOString()}] [Google] Falha na busca:`, err.message);
-    return [];
   }
+
+  console.log(`[${new Date().toISOString()}] [Google] Total retornado: ${resultados.length} itens`);
+  return resultados;
 }
 
 function normalizarItemGoogle(item) {
   try {
-    // Tentar extrair preço do snippet ou metatags
-    const preco = extrairPreco(item.snippet || '') || extrairPreco(item.title || '');
+    const dominio = extrairDominio(item.link);
+
+    // Filtrar resultados que não são de lojas (ex: blogs, reviews)
+    const ehLoja = SITES_BR.some(site => (dominio || '').includes(site.replace('www.', '')));
+    const temPrecoNoTitulo = /R\$/.test(item.title || '') || /R\$/.test(item.snippet || '');
+
+    // Incluir apenas se for de uma loja conhecida ou tiver preço no título/snippet
+    if (!ehLoja && !temPrecoNoTitulo) return null;
+
+    // Extrair preço do snippet, título ou metatags
+    const preco = extrairPreco(item.pagemap?.offer?.[0]?.price)
+      || extrairPreco(item.snippet || '')
+      || extrairPreco(item.title || '');
 
     // Thumbnail via pagemap
     const thumbnail = item.pagemap?.cse_image?.[0]?.src
       || item.pagemap?.cse_thumbnail?.[0]?.src
+      || item.pagemap?.product?.[0]?.image
       || null;
 
-    // Vendedor pelo domínio
-    const vendedor = extrairDominio(item.link);
+    // Limpar título (remover domínio e sufixos comuns)
+    const titulo = (item.title || '')
+      .replace(/\s*[-|]\s*(Shopee|Americanas|Magazine Luiza|MercadoLivre|Amazon|Kabum).*$/i, '')
+      .trim();
 
     return {
-      id: `google_${Buffer.from(item.link).toString('base64').slice(0, 20)}`,
+      id: `google_${Buffer.from(item.link).toString('base64').slice(0, 24)}`,
       fonte: 'google',
-      titulo: item.title || '',
+      titulo,
       preco,
       preco_original: null,
       link: item.link || '',
       thumbnail,
-      vendedor,
+      vendedor: dominio,
       reputacao_vendedor: null,
       frete_gratis: false,
       quantidade_vendas: null,
-      // Campos para o comparator (texto rico para matching)
       attributes: [],
-      descricao: `${item.title} ${item.snippet}`,
+      descricao: `${titulo} ${item.snippet || ''}`,
     };
   } catch {
     return null;
@@ -91,8 +138,8 @@ function normalizarItemGoogle(item) {
 
 function extrairPreco(texto) {
   if (!texto) return null;
-  // Padrões: R$ 1.234,56 | R$1234,56 | 1234.56
-  const match = texto.match(/R\$\s?([\d.]+,\d{2})/);
+  // Padrões: R$ 1.234,56 | R$1234,56 | R$ 189,90
+  const match = String(texto).match(/R\$\s?([\d.]+,\d{2})/);
   if (match) {
     return parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
   }
