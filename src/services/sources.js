@@ -1,8 +1,9 @@
 import { buscarProdutos, buscarDetalhesMultiplos } from './mercadolivre.js';
 import { buscarShopee } from './shopee.js';
 import { buscarGoogle } from './googleShopping.js';
+import { buscarSerpApi } from './serpapi.js';
 
-export const FONTES_DISPONIVEIS = ['mercadolivre', 'shopee', 'google'];
+export const FONTES_DISPONIVEIS = ['mercadolivre', 'shopee', 'google', 'serpapi'];
 
 /**
  * Busca produtos em todas as fontes solicitadas em paralelo.
@@ -60,6 +61,9 @@ async function buscarFonte(fonte, query) {
 
     case 'google':
       return buscarGoogle(query);
+
+    case 'serpapi':
+      return buscarSerpApi(query);
 
     default:
       return [];

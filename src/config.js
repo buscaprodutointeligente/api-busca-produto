@@ -16,6 +16,9 @@ const config = {
     apiKey: process.env.GOOGLE_API_KEY,
     cseId: process.env.GOOGLE_CSE_ID,
   },
+  serpapi: {
+    apiKey: process.env.SERPAPI_KEY,
+  },
 };
 
 export default config;
