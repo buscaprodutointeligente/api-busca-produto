@@ -34,8 +34,12 @@ export async function buscarProdutos(query, categoryId = null) {
   const url = `${config.ml.baseUrl}/sites/${config.ml.siteId}/search?${params}`;
   console.log(`[${new Date().toISOString()}] Buscando no ML: ${url}`);
 
-  const response = await fetch(url, { headers: await buildHeaders() });
+  const headers = await buildHeaders();
+  console.log(`[${new Date().toISOString()}] Headers ML:`, JSON.stringify(headers));
+  const response = await fetch(url, { headers });
   if (!response.ok) {
+    const body = await response.text();
+    console.error(`[${new Date().toISOString()}] ML resposta ${response.status}:`, body);
     throw new Error(`Erro na busca ML: ${response.status} ${response.statusText}`);
   }
 
